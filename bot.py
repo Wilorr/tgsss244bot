@@ -1,3 +1,4 @@
+import os
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -10,7 +11,7 @@ from telegram.ext import (
 )
 
 # Конфигурация
-TOKEN = "7863685675:AAG6OY1khfMVi4MfIP5Lo--F0zcGAiZWS44"
+TOKEN = os.environ['BOT_TOKEN']  # Получаем токен из переменных окружения
 CHANNEL_ID = -1002509915735  # Ваш закрытый канал
 CHANNEL1 = "@GrowGate"  # Первый канал для подписки
 CHANNEL2 = "@GrowGateTrade"  # Второй канал для подписки
