@@ -1,92 +1,58 @@
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
 import os
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    CallbackQueryHandler,
-    ChatJoinRequestHandler,
-    ContextTypes,
-    filters
-)
 
-# Конфигурация
+# Настройки
 TOKEN = os.environ['BOT_TOKEN']  # Получаем токен из переменных окружения
-CHANNEL_ID = -1002509915735  # Ваш закрытый канал
 CHANNEL1 = "@GrowGate"  # Первый канал для подписки
 CHANNEL2 = "@GrowGateTrade"  # Второй канал для подписки
 
-# Настройка логгирования
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+# Логирование
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-async def send_welcome_message(user_id: int, context: ContextTypes.DEFAULT_TYPE):
-    """Отправляем приветственное сообщение"""
-    try:
-        buttons = [
-            [InlineKeyboardButton("GrowGate", url=f"t.me/GrowGate")],
-            [InlineKeyboardButton("GrowGateTrade", url=f"t.me/GrowGateTrade")],
-            [InlineKeyboardButton("✅ Я подписался", callback_data="check_subs")]
-        ]
-        await context.bot.send_message(
-            chat_id=user_id,
-            text="🔐 Для доступа к закрытому каналу нужно подписаться на:",
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
-    except Exception as e:
-        logger.error(f"Не удалось отправить сообщение пользователю {user_id}: {e}")
+def start(update: Update, context):
+    """Обработка команды /start"""
+    keyboard = [
+        [InlineKeyboardButton("Канал 1", url=f"https://t.me/{CHANNEL1[1:]}")],
+        [InlineKeyboardButton("Канал 2", url=f"https://t.me/{CHANNEL2[1:]}")],
+        [InlineKeyboardButton("✅ Я подписался", callback_data="check_subs")]
+    ]
+    update.message.reply_text(
+        "🔐 Для доступа подпишитесь на оба канала:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
-async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработка новой заявки в канал"""
-    user = update.chat_join_request.from_user
-    logger.info(f"Новая заявка от @{user.username} (ID: {user.id})")
-    await send_welcome_message(user.id, context)
-
-async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Проверка подписки и одобрение заявки"""
+def check_subscription(update: Update, context):
+    """Проверка подписки на каналы"""
     query = update.callback_query
-    await query.answer()
     user = query.from_user
-
+    
     try:
-        # Проверяем подписку на оба канала
-        channel1_member = await context.bot.get_chat_member(CHANNEL1, user.id)
-        channel2_member = await context.bot.get_chat_member(CHANNEL2, user.id)
-
-        if channel1_member.status in ['member', 'administrator', 'creator'] and \
-           channel2_member.status in ['member', 'administrator', 'creator']:
-            try:
-                await context.bot.approve_chat_join_request(CHANNEL_ID, user.id)
-                await query.edit_message_text("🎉 Спасибо за подписки! Доступ к каналу открыт.")
-            except Exception as e:
-                logger.error(f"Ошибка принятия заявки: {e}")
-                await query.edit_message_text("⚠️ Не удалось принять заявку. Убедитесь, что вы подавали заявку в канал.")
+        # Проверяем подписку
+        member1 = context.bot.get_chat_member(chat_id=CHANNEL1, user_id=user.id)
+        member2 = context.bot.get_chat_member(chat_id=CHANNEL2, user_id=user.id)
+        
+        if member1.status in ['member', 'administrator', 'creator'] and member2.status in ['member', 'administrator', 'creator']:
+            query.answer("🎉 Доступ разрешен!")
+            query.edit_message_text("✅ Спасибо за подписку! Теперь вам доступен закрытый канал.")
+            # Здесь можно добавить логику принятия заявки
         else:
-            await query.edit_message_text("❌ Вы подписаны не на все каналы! Пожалуйста, подпишитесь на оба канала и попробуйте снова.")
-            
+            query.answer("❌ Вы подписаны не на все каналы!")
     except Exception as e:
         logger.error(f"Ошибка проверки подписки: {e}")
-        await query.edit_message_text("⚠️ Произошла ошибка. Попробуйте позже.")
+        query.answer("⚠️ Ошибка проверки. Попробуйте позже.")
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработка команды /start"""
-    await send_welcome_message(update.effective_user.id, context)
+def main():
+    updater = Updater(TOKEN, use_context=True)
+    dp = updater.dispatcher
 
-def main() -> None:
-    """Запуск бота"""
-    app = ApplicationBuilder().token(TOKEN).build()
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CallbackQueryHandler(check_subscription, pattern="^check_subs$"))
 
-    # Регистрация обработчиков
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(ChatJoinRequestHandler(handle_join_request))
-    app.add_handler(CallbackQueryHandler(check_subscription))
+    updater.start_polling()
+    updater.idle()
 
-    # Запуск
-    app.run_polling()
-    logger.info("Бот запущен и готов к работе")
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
